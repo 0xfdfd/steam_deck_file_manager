@@ -9,5 +9,8 @@ target/
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
+# vscode
+.vscode
+
 # Helix editor configuration
 .helix
