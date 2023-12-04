@@ -1,4 +1,9 @@
 /**
+ * The current directory. This should be an absolute path.
+ */
+let g_current_directory = "";
+
+/**
  * Fetches data from the "/api/home" endpoint, then fetches data from the "/api/listdir/{data}" endpoint,
  * and fills a table with the retrieved data.
  *
@@ -6,29 +11,40 @@
  * @return {type} description of return value
  */
 function document_ready() {
-  const pathInput = document.getElementById("pathInput");
-  const goButton = document.getElementById("goButton");
+  const uploadButton = document.getElementById("uploadButton");
+  uploadButton.addEventListener("click", () => {
+    upload_file();
+  });
 
+  const pathInput = document.getElementById("pathInput");
   pathInput.addEventListener("keyup", (event) => {
     if (event.key === "Enter") {
       const path = pathInput.value;
-      load_path(path);
+      file_explorer_reload_path(path);
     }
   });
+
+  const goButton = document.getElementById("goButton");
   goButton.addEventListener("click", () => {
     const path = pathInput.value;
-    load_path(path);
+    file_explorer_reload_path(path);
   });
 
   fetch("/api/home")
     .then((response) => response.json())
     .then((data) => {
-      load_path(data);
+      file_explorer_reload_path(data);
     })
     .catch((error) => console.error("Error:", error));
 }
 
-function load_path(path) {
+/**
+ * Reloads the file explorer with the contents of the specified path.
+ *
+ * @param {string} path - The path to the directory to be loaded.
+ * @return {undefined} No return value.
+ */
+function file_explorer_reload_path(path) {
   fetch("/api/listdir?path=" + encodeURIComponent(path))
     .then((response) => response.json())
     .then((data) => fillTable(data))
@@ -37,6 +53,7 @@ function load_path(path) {
 
 function fillTable(data) {
   const pathInput = document.getElementById("pathInput");
+  g_current_directory = data.requested_path;
 
   const tableBody = document.getElementById("fileTable").querySelector("tbody");
   tableBody.innerHTML = "";
@@ -71,4 +88,51 @@ function formatSize(size) {
     ratio = 100;
   }
   return [Math.round((size * ratio) / Math.pow(1024, i), 2) / ratio, sizes[i]];
+}
+
+function upload_file() {
+  const fileInput = document.getElementById("fileInput");
+  const uploadProgress = document.getElementById("uploadProgress");
+
+  if (fileInput.files.length === 0) {
+    alert("Please select a file to upload.");
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open(
+    "POST",
+    "/api/upload?path=" + encodeURIComponent(g_current_directory),
+    true
+  ); // true for asynchronous
+
+  xhr.upload.addEventListener("progress", (event) => {
+    if (event.lengthComputable) {
+      const percent = Math.round((event.loaded / event.total) * 100);
+      uploadProgress.value = percent;
+    }
+  });
+
+  xhr.onload = () => {
+    if (xhr.status === 200) {
+      alert("File uploaded successfully.");
+
+      // Once successfully uploaded, reload the current directory.
+      file_explorer_reload_path(g_current_directory);
+    } else {
+      alert("Error uploading file.");
+    }
+    uploadProgress.value = 0;
+  };
+
+  xhr.onerror = () => {
+    alert("Error uploading file.");
+    uploadProgress.value = 0;
+  };
+
+  xhr.send(formData);
 }

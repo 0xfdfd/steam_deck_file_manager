@@ -9,11 +9,21 @@
     <title>Steam Deck File Manager</title>
   </head>
   <body>
+
+    <!-- File upload form -->
+    <div>
+      <input type="file" id="fileInput" />
+      <button id="uploadButton">Upload</button>
+      <progress id="uploadProgress" value="0" max="100"></progress>
+    </div>
+
+    <!-- File navigation bar -->
     <div>
       <input type="text" id="pathInput" placeholder="Enter path" />
       <button id="goButton">Go</button>
     </div>
 
+    <!-- File table -->
     <table id="fileTable" class="sortable">
       <thead>
         <tr>
