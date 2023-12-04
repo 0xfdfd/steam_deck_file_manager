@@ -31,6 +31,34 @@ pub fn new(
     return Ok(srv);
 }
 
+lazy_static::lazy_static! {
+    static ref RENDER : handlebars::Handlebars<'static> = {
+        let mut handlebar = handlebars::Handlebars::new();
+        handlebar.register_escape_fn(handlebars::no_escape);
+
+        let file = crate::asset::Asset::get("index.html").unwrap();
+        let data = std::str::from_utf8(file.data.as_ref()).unwrap();
+        handlebar.register_template_string("index.html", data).unwrap();
+
+        handlebar
+    };
+}
+
+#[derive(serde::Serialize)]
+struct HtmlRender {
+    fs_data: String,
+}
+
+impl HtmlRender {
+    fn render(fs_data: &str) -> String {
+        let render = HtmlRender {
+            fs_data: fs_data.to_string(),
+        };
+
+        return RENDER.render("index.html", &render).unwrap();
+    }
+}
+
 #[actix_web::get("/")]
 async fn index(
     config: actix_web::web::Data<crate::AppConfig>,
@@ -72,10 +100,7 @@ async fn fs(path: actix_web::web::Path<String>) -> actix_web::Result<impl actix_
         }
     };
     let fs_json = serde_json::to_string(&fs_list_ret).unwrap();
-
-    let f = crate::asset::Asset::get("index.html").unwrap();
-    let data = std::str::from_utf8(f.data.as_ref()).unwrap();
-    let data = data.replace("FS_DATA", fs_json.as_str());
+    let data = HtmlRender::render(fs_json.as_str());
 
     let rsp = actix_web::HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
