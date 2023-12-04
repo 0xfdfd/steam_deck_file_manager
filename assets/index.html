@@ -7,20 +7,16 @@
     <link href="/assets/sortable.min.css" rel="stylesheet" />
     <script src="/assets/sortable.min.js"></script>
     <title>Steam Deck File Manager</title>
+    <script type="application/json" id="fs_data">
+      FS_DATA
+    </script>
   </head>
   <body>
-
     <!-- File upload form -->
     <div>
       <input type="file" id="fileInput" />
       <button id="uploadButton">Upload</button>
       <progress id="uploadProgress" value="0" max="100"></progress>
-    </div>
-
-    <!-- File navigation bar -->
-    <div>
-      <input type="text" id="pathInput" placeholder="Enter path" />
-      <button id="goButton">Go</button>
     </div>
 
     <!-- File table -->

@@ -16,49 +16,26 @@ function document_ready() {
     upload_file();
   });
 
-  const pathInput = document.getElementById("pathInput");
-  pathInput.addEventListener("keyup", (event) => {
-    if (event.key === "Enter") {
-      const path = pathInput.value;
-      file_explorer_reload_path(path);
-    }
-  });
+  /**
+   * Get json data from fs_data
+   */
+  const fs_data = JSON.parse(document.getElementById("fs_data").textContent);
 
-  const goButton = document.getElementById("goButton");
-  goButton.addEventListener("click", () => {
-    const path = pathInput.value;
-    file_explorer_reload_path(path);
-  });
+  /* Set the current directory and update title */
+  g_current_directory = fs_data.requested_path;
+  document.title = `Index of ${g_current_directory}`;
 
-  fetch("/api/home")
-    .then((response) => response.json())
-    .then((data) => {
-      file_explorer_reload_path(data);
-    })
-    .catch((error) => console.error("Error:", error));
+  /* Fill the table */
+  fillTable(fs_data.requested_path, fs_data.entries);
 }
 
-/**
- * Reloads the file explorer with the contents of the specified path.
- *
- * @param {string} path - The path to the directory to be loaded.
- * @return {undefined} No return value.
- */
-function file_explorer_reload_path(path) {
-  fetch("/api/listdir?path=" + encodeURIComponent(path))
-    .then((response) => response.json())
-    .then((data) => fillTable(data))
-    .catch((error) => console.error("Error:", error));
-}
-
-function fillTable(data) {
+function fillTable(path, data) {
   const pathInput = document.getElementById("pathInput");
-  g_current_directory = data.requested_path;
 
   const tableBody = document.getElementById("fileTable").querySelector("tbody");
   tableBody.innerHTML = "";
 
-  data.entries.forEach((item) => {
+  data.forEach((item) => {
     const row = document.createElement("tr");
     const size = formatSize(item.f_size).join(" ");
     const time = format_epoch_as_local(item.f_modified);
@@ -71,7 +48,7 @@ function fillTable(data) {
     tableBody.appendChild(row);
   });
 
-  pathInput.value = data.requested_path;
+  pathInput.value = path;
 }
 
 /**
@@ -130,7 +107,7 @@ function upload_file() {
   const xhr = new XMLHttpRequest();
   xhr.open(
     "POST",
-    "/api/upload?path=" + encodeURIComponent(g_current_directory),
+    "/upload?path=" + encodeURIComponent(g_current_directory),
     true
   ); // true for asynchronous
 
@@ -146,7 +123,7 @@ function upload_file() {
       alert("File uploaded successfully.");
 
       // Once successfully uploaded, reload the current directory.
-      file_explorer_reload_path(g_current_directory);
+      window.location.reload(true);
     } else {
       alert("Error uploading file.");
     }

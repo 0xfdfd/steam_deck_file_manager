@@ -11,9 +11,8 @@ pub fn new(ip: &str, port: u16) -> Result<actix_web::dev::Server, std::io::Error
         return actix_web::App::new()
             .service(index)
             .service(assets)
-            .service(api_home)
-            .service(api_listdir)
-            .service(api_upload);
+            .service(fs)
+            .service(upload);
     })
     .bind(addr);
 
@@ -28,29 +27,51 @@ pub fn new(ip: &str, port: u16) -> Result<actix_web::dev::Server, std::io::Error
 }
 
 #[actix_web::get("/")]
-async fn index() -> impl actix_web::Responder {
-    return handle_embedded_file("index.html");
+async fn index() -> actix_web::Result<impl actix_web::Responder> {
+    // Get home dir
+    let home_dir = match home::home_dir() {
+        Some(v) => v.to_str().unwrap().to_string(),
+        None => {
+            return Ok(
+                actix_web::HttpResponse::InternalServerError().body("Failed to get home dir")
+            );
+        }
+    };
+    let home_dir = urlencoding::encode(home_dir.as_str());
+    tracing::debug!("home_dir: {}", home_dir);
+
+    // Redirect to /fs/<home_dir>
+    let rsp = actix_web::HttpResponse::TemporaryRedirect()
+        .append_header((
+            actix_web::http::header::LOCATION,
+            format!("/fs/{}", home_dir),
+        ))
+        .finish();
+
+    return Ok(rsp);
 }
 
-/// Return the home directory
-#[actix_web::get("/api/home")]
-async fn api_home() -> actix_web::Result<impl actix_web::Responder> {
-    Ok(actix_web::web::Json(home::home_dir()))
-}
+#[actix_web::get("/fs/{path}")]
+async fn fs(path: actix_web::web::Path<String>) -> actix_web::Result<impl actix_web::Responder> {
+    tracing::info!("fs: {}", path);
 
-#[derive(serde::Deserialize)]
-struct ListDirRequest {
-    path: String,
-}
+    let fs_list_ret = match listdir(path.as_str()).await {
+        Ok(v) => v,
+        Err(e) => {
+            return Ok(actix_web::HttpResponse::NotFound().body(e.to_string()));
+        }
+    };
+    let fs_json = serde_json::to_string(&fs_list_ret).unwrap();
 
-#[actix_web::get("/api/listdir")]
-async fn api_listdir(
-    info: actix_web::web::Query<ListDirRequest>,
-) -> actix_web::Result<impl actix_web::Responder> {
-    tracing::info!("api_listdir: {}", info.path);
+    let f = crate::asset::Asset::get("index.html").unwrap();
+    let data = std::str::from_utf8(f.data.as_ref()).unwrap();
+    let data = data.replace("FS_DATA", fs_json.as_str());
 
-    let ret = listdir(info.path.as_str()).await?;
-    Ok(actix_web::web::Json(ret))
+    let rsp = actix_web::HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(data);
+
+    return Ok(rsp);
 }
 
 /// Query arguments for upload a file
@@ -60,8 +81,8 @@ struct UploadRequest {
     path: String,
 }
 
-#[actix_web::post("/api/upload")]
-async fn api_upload(
+#[actix_web::post("/upload")]
+async fn upload(
     mut payload: actix_multipart::Multipart,
     info: actix_web::web::Query<UploadRequest>,
 ) -> actix_web::Result<impl actix_web::Responder> {
@@ -155,7 +176,7 @@ struct ListDirItem {
     f_modified: u64,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 struct ListdirResult {
     requested_path: String,
     entries: Vec<ListDirItem>,
