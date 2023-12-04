@@ -136,12 +136,23 @@ fn handle_embedded_file(path: &str) -> actix_web::HttpResponse {
     }
 }
 
-#[derive(serde::Serialize)]
+/// List a directory.
+#[derive(Debug, serde::Serialize)]
 struct ListDirItem {
+    /// The name of the file.
     f_name: String,
+
+    /// The absolute path to the file.
     f_path: String,
+
+    /// The type of the file.
     f_type: String,
+
+    /// The size of the file in bytes.
     f_size: u64,
+
+    /// The last modified time of the file.
+    f_modified: u64,
 }
 
 #[derive(serde::Serialize)]
@@ -155,6 +166,8 @@ async fn listdir(path: &str) -> Result<ListdirResult, std::io::Error> {
     let mut entries = tokio::fs::read_dir(path).await?;
 
     while let Some(entry) = entries.next_entry().await? {
+        let metadata = entry.metadata().await?;
+
         ret.push(ListDirItem {
             f_name: entry.file_name().to_str().unwrap().to_string(),
             f_path: entry.path().to_str().unwrap().to_string(),
@@ -163,7 +176,14 @@ async fn listdir(path: &str) -> Result<ListdirResult, std::io::Error> {
             } else {
                 "FILE".to_string()
             },
-            f_size: entry.metadata().await.unwrap().len(),
+            f_size: metadata.len(),
+            f_modified: match metadata.modified() {
+                Ok(t) => t
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                Err(_) => 0,
+            },
         });
     }
 

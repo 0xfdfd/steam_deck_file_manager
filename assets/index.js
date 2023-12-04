@@ -61,15 +61,39 @@ function fillTable(data) {
   data.entries.forEach((item) => {
     const row = document.createElement("tr");
     const size = formatSize(item.f_size).join(" ");
+    const time = format_epoch_as_local(item.f_modified);
     row.innerHTML = `
         <td>${item.f_name}</td>
         <td>${item.f_type}</td>
         <td data-sort="${item.f_size}">${size}</td>
+        <td data-sort="${item.f_modified}">${time}</td>
     `;
     tableBody.appendChild(row);
   });
 
   pathInput.value = data.requested_path;
+}
+
+/**
+ * Formats the given epoch (in seconds) as a local date and time string.
+ *
+ * @param {number} epoch - The epoch time to format.
+ * @return {string} The formatted local date and time string.
+ */
+function format_epoch_as_local(epoch) {
+  // Convert the epoch to a Date object
+  const date = new Date(epoch * 1000);
+
+  // Format the date to local time
+  let year = date.getFullYear();
+  let month = (date.getMonth() + 1).toString().padStart(2, "0");
+  let day = date.getDate().toString().padStart(2, "0");
+  let hours = date.getHours().toString().padStart(2, "0");
+  let minutes = date.getMinutes().toString().padStart(2, "0");
+  let seconds = date.getSeconds().toString().padStart(2, "0");
+
+  // Return the formatted date and time
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 /**
