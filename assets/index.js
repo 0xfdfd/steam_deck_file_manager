@@ -36,11 +36,14 @@ function fillTable(path, data) {
   tableBody.innerHTML = "";
 
   data.forEach((item) => {
+    /* Create a table row */
     const row = document.createElement("tr");
+    /* Fill the table row */
+    const path = "/fs/" + encodeURIComponent(item.f_path);
     const size = formatSize(item.f_size).join(" ");
     const time = format_epoch_as_local(item.f_modified);
     row.innerHTML = `
-        <td>${item.f_name}</td>
+        <td><a href="${path}">${item.f_name}</a></td>
         <td>${item.f_type}</td>
         <td data-sort="${item.f_size}">${size}</td>
         <td data-sort="${item.f_modified}">${time}</td>
