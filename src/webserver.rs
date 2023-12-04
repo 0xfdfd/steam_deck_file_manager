@@ -4,11 +4,16 @@
 ///
 /// + `ip`: The IP address to bind to.
 /// + `port`: The port to bind to.
-pub fn new(ip: &str, port: u16) -> Result<actix_web::dev::Server, std::io::Error> {
+pub fn new(
+    ip: &str,
+    port: u16,
+    config: crate::AppConfig,
+) -> Result<actix_web::dev::Server, std::io::Error> {
     let addr = format!("{}:{}", ip, port);
 
-    let srv = actix_web::HttpServer::new(|| {
+    let srv = actix_web::HttpServer::new(move || {
         return actix_web::App::new()
+            .app_data(actix_web::web::Data::new(config.clone()))
             .service(index)
             .service(assets)
             .service(fs)
@@ -27,24 +32,29 @@ pub fn new(ip: &str, port: u16) -> Result<actix_web::dev::Server, std::io::Error
 }
 
 #[actix_web::get("/")]
-async fn index() -> actix_web::Result<impl actix_web::Responder> {
+async fn index(
+    config: actix_web::web::Data<crate::AppConfig>,
+) -> actix_web::Result<impl actix_web::Responder> {
     // Get home dir
-    let home_dir = match home::home_dir() {
-        Some(v) => v.to_str().unwrap().to_string(),
-        None => {
-            return Ok(
-                actix_web::HttpResponse::InternalServerError().body("Failed to get home dir")
-            );
-        }
+    let home_dir = match config.home_dir.clone() {
+        Some(v) => v,
+        None => match home::home_dir() {
+            Some(v) => v.to_str().unwrap().to_string(),
+            None => {
+                return Ok(
+                    actix_web::HttpResponse::InternalServerError().body("Failed to get home dir")
+                );
+            }
+        },
     };
-    let home_dir = urlencoding::encode(home_dir.as_str());
+
     tracing::debug!("home_dir: {}", home_dir);
 
     // Redirect to /fs/<home_dir>
     let rsp = actix_web::HttpResponse::TemporaryRedirect()
         .append_header((
             actix_web::http::header::LOCATION,
-            format!("/fs/{}", home_dir),
+            format!("/fs/{}", urlencoding::encode(home_dir.as_str())),
         ))
         .finish();
 
