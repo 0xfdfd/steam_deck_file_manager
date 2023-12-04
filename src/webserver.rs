@@ -90,8 +90,25 @@ async fn index(
 }
 
 #[actix_web::get("/fs/{path}")]
-async fn fs(path: actix_web::web::Path<String>) -> actix_web::Result<impl actix_web::Responder> {
+async fn fs(
+    req: actix_web::HttpRequest,
+    path: actix_web::web::Path<String>,
+) -> actix_web::Result<impl actix_web::Responder> {
     tracing::info!("fs: {}", path);
+
+    // Query path information.
+    let metadata = match tokio::fs::metadata(path.as_ref()).await {
+        Ok(v) => v,
+        Err(e) => {
+            return Ok(actix_web::HttpResponse::NotFound().body(e.to_string()));
+        }
+    };
+
+    // If it's a file, serve it directly.
+    if metadata.is_file() {
+        let ret = actix_files::NamedFile::open_async(path.as_ref()).await?;
+        return Ok(ret.into_response(&req));
+    }
 
     let fs_list_ret = match listdir(path.as_str()).await {
         Ok(v) => v,
