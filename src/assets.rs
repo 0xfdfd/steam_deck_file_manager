@@ -7,6 +7,10 @@ struct Assets0;
 #[folder = "$CARGO_MANIFEST_DIR/assets"]
 struct Assets1;
 
+/// Get an embedded file
+/// 
+/// # Arguments
+/// + `path`: The path to the file
 pub fn get(path: &str) -> Option<rust_embed::EmbeddedFile> {
     match Assets0::get(path) {
         Some(v) => return Some(v),
