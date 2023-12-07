@@ -1,11 +1,17 @@
+#[derive(Debug)]
+pub struct Config {
+    pub ip: String,
+    pub port: u16,
+}
+
 /// Create a new webserver.
 ///
 /// # Arguments
 ///
 /// + `ip`: The ip to bind to.
 /// + `port`: The port to bind to.
-pub async fn new(ip: &str, port: u16) -> std::io::Result<()> {
-    let addr = format!("{}:{}", ip, port);
+pub async fn new(config: &Config) -> std::io::Result<()> {
+    let addr = format!("{}:{}", config.ip, config.port);
 
     actix_web::HttpServer::new(|| {
         let ext_data = actix_web::web::Data::new(crate::api::BackendData::new());

@@ -11,6 +11,7 @@ members = [
 
 [dependencies]
 actix-web = "4.4.0"
+clap = { version = "4.4.11", features = ["std", "color", "derive"] }
 frontend = { version = "0.1.0", path = "./frontend" }
 handlebars = "4.5.0"
 mime_guess = "2.0.4"
