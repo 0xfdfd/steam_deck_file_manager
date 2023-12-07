@@ -10,12 +10,12 @@
 
   <link
     rel="preload"
-    href="{{wasm_name}}_bg.wasm"
+    href="/assets/{{wasm_name}}_bg.wasm"
     as="fetch"
     type="application/wasm"
     crossorigin=""
   />
-  <link rel="modulepreload" href="/{{wasm_name}}.js" />
+  <link rel="modulepreload" href="/assets/{{wasm_name}}.js" />
 
   <head>
     <title>egui – An immediate mode GUI written in Rust</title>
@@ -115,7 +115,7 @@
     </div>
 
     <script type="module">
-      import init, { start_ui } from "/{{wasm_name}}.js";
+      import init, { start_ui } from "/assets/{{wasm_name}}.js";
       init().then(() => {
         start_ui("the_canvas_id").then(() => {
           document.getElementById("center_text").innerHTML = "";

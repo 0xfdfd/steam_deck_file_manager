@@ -8,7 +8,7 @@ struct Assets0;
 struct Assets1;
 
 /// Get an embedded file
-/// 
+///
 /// # Arguments
 /// + `path`: The path to the file
 pub fn get(path: &str) -> Option<rust_embed::EmbeddedFile> {

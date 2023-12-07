@@ -58,7 +58,7 @@ async fn get_index(
     return Ok(rsp);
 }
 
-#[actix_web::get("/{path}")]
+#[actix_web::get("/assets/{path}")]
 async fn get_assets(
     path: actix_web::web::Path<String>,
 ) -> actix_web::Result<impl actix_web::Responder> {
