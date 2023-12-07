@@ -1,7 +1,7 @@
 /// Serve index.html for `/`.
 #[actix_web::get("/")]
 pub async fn get(
-    data: actix_web::web::Data<crate::api::BackendData<'_>>,
+    data: actix_web::web::Data<crate::webserver::BackendData<'_>>,
 ) -> actix_web::Result<impl actix_web::Responder> {
     let data = data
         .render

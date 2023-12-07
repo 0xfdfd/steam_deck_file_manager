@@ -1,25 +1,50 @@
+use wasm_bindgen::JsCast;
+
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
-pub struct WebUI {
+pub struct WebUiImpl {
     label: String,
     value: f32,
+
+    homedir: Option<String>,
 }
+
+#[derive(Clone)]
+pub struct WebUI(std::sync::Arc<std::sync::RwLock<WebUiImpl>>);
 
 impl WebUI {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
+        let mut ctx = WebUiImpl::default();
+
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            ctx = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
 
-        Default::default()
+        Self(std::sync::Arc::new(std::sync::RwLock::new(ctx)))
+    }
+}
+
+impl std::fmt::Debug for WebUI {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebUI").finish_non_exhaustive()
     }
 }
 
 impl eframe::App for WebUI {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        let ctx = WebUiImpl {
+            label: self.0.read().unwrap().label.clone(),
+            value: self.0.read().unwrap().value,
+            ..Default::default()
+        };
+
+        eframe::set_value(storage, eframe::APP_KEY, &ctx);
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -38,6 +63,24 @@ impl eframe::App for WebUI {
 
                 egui::widgets::global_dark_light_mode_buttons(ui);
             });
+
+            if ui.button("Home").clicked() {
+                log::info!("Home button clicked");
+
+                let ctx = self.clone();
+
+                fetch_post("/api/homedir", move |json| {
+                    ctx.0.write().unwrap().homedir = Some(json.unwrap().to_string());
+                });
+            }
+
+            if self.0.read().unwrap().homedir.is_some() {
+                let txt = format!(
+                    "homedir: {}",
+                    self.0.read().unwrap().homedir.as_ref().unwrap()
+                );
+                ui.label(txt);
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -46,12 +89,12 @@ impl eframe::App for WebUI {
 
             ui.horizontal(|ui| {
                 ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
+                ui.text_edit_singleline(&mut self.0.write().unwrap().label);
             });
 
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
+            ui.add(egui::Slider::new(&mut self.0.write().unwrap().value, 0.0..=10.0).text("value"));
             if ui.button("Increment").clicked() {
-                self.value += 1.0;
+                self.0.write().unwrap().value += 1.0;
             }
 
             ui.separator();
@@ -80,5 +123,34 @@ fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
             "https://github.com/emilk/egui/tree/master/crates/eframe",
         );
         ui.label(".");
+    });
+}
+
+fn fetch_post<F>(url: &str, mut func: F)
+where
+    F: FnMut(Result<serde_json::Value, String>) + 'static,
+{
+    let window = web_sys::window().unwrap();
+
+    let mut opt = web_sys::RequestInit::new();
+    opt.method("POST");
+
+    let request = web_sys::Request::new_with_str_and_init(url, &opt).unwrap();
+    let request: wasm_bindgen::JsValue = request.into();
+
+    wasm_bindgen_futures::spawn_local(async move {
+        let promise = window.fetch_with_request(&request.into());
+        let rsp = wasm_bindgen_futures::JsFuture::from(promise).await.unwrap();
+        let rsp: web_sys::Response = rsp.dyn_into().unwrap();
+
+        let data = rsp.text().unwrap();
+        let json = wasm_bindgen_futures::JsFuture::from(data).await.unwrap();
+        let json = json.as_string().unwrap();
+
+        if rsp.ok() {
+            func(Ok(serde_json::from_str(json.as_str()).unwrap()));
+        } else {
+            func(Err(json));
+        }
     });
 }

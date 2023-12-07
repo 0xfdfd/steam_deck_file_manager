@@ -9,6 +9,9 @@ struct BackendConfig {
 
     #[arg(long, default_value = "5000", help = "The port to bind to.")]
     port: u16,
+
+    #[arg(long, help = "The path to the home directory.")]
+    homedir: Option<String>,
 }
 
 #[tokio::main]
@@ -25,9 +28,10 @@ async fn main() -> std::io::Result<()> {
     let config = BackendConfig::parse();
 
     // Start the webserver.
-    crate::webserver::new(&webserver::Config {
+    crate::webserver::new(webserver::Config {
         ip: config.ip,
         port: config.port,
+        homedir: config.homedir,
     })
     .await
 }

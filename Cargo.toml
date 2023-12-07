@@ -14,6 +14,7 @@ actix-web = "4.4.0"
 clap = { version = "4.4.11", features = ["std", "color", "derive"] }
 frontend = { version = "0.1.0", path = "./frontend" }
 handlebars = "4.5.0"
+home = "0.5.5"
 mime_guess = "2.0.4"
 rust-embed = { version = "8.0.0", features = ["interpolate-folder-path", "include-exclude"] }
 serde = { version = "1.0.193", features = ["derive"] }
