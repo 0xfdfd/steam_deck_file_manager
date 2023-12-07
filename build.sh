@@ -16,7 +16,7 @@ while test $# -gt 0; do
     --release)
       shift
       CARGO_BUILD_FLAGS="--release"
-	  WASM_PACK_BUILD_FLAGS="--release"
+      WASM_PACK_BUILD_FLAGS="--release"
       ;;
 
     --run)
@@ -39,15 +39,13 @@ if ! [ -x "$(command -v wasm-bindgen)" ]; then
 fi
 
 # Build frontend
-(cd frontend && cargo fmt && wasm-pack build ${WASM_PACK_BUILD_FLAGS} --target web)
-cp frontend/pkg/frontend.js backend/assets/
-cp frontend/pkg/frontend_bg.wasm backend/assets/
+(cd frontend && cargo fmt && wasm-pack build ${WASM_PACK_BUILD_FLAGS} --no-typescript --no-pack --target web)
 
 # Build backend
-(cd backend && cargo fmt && cargo build ${CARGO_BUILD_FLAGS})
+(cargo fmt && cargo build ${CARGO_BUILD_FLAGS})
 
 # Run
 if [[ "${RUN}" = "true" ]]; then
-  (cd backend && cargo run ${CARGO_BUILD_FLAGS})
+  (cargo run ${CARGO_BUILD_FLAGS})
 fi
 

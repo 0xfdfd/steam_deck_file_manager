@@ -9,10 +9,6 @@ target/
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-# Frontend assets
-/backend/assets/frontend.js
-/backend/assets/frontend_bg.wasm
-
 # vscode
 .vscode
 
