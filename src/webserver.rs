@@ -5,12 +5,12 @@ pub struct Config {
     pub homedir: Option<String>,
 }
 
-pub struct BackendData<'a> {
-    pub render: handlebars::Handlebars<'a>,
+pub struct BackendData {
+    pub render: handlebars::Handlebars<'static>,
     pub homedir: String,
 }
 
-impl BackendData<'_> {
+impl BackendData {
     pub fn new(config: Config) -> Self {
         let mut handlebars = handlebars::Handlebars::new();
         {

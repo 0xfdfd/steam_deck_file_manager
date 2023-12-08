@@ -1,6 +1,6 @@
 #[actix_web::post("/api/homedir")]
 pub async fn post(
-    data: actix_web::web::Data<crate::webserver::BackendData<'_>>,
+    data: actix_web::web::Data<crate::webserver::BackendData>,
 ) -> impl actix_web::Responder {
     let homedir = &data.homedir;
     tracing::info!("homedir: {}", homedir);
