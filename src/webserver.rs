@@ -54,6 +54,7 @@ pub async fn new(config: Config) -> std::io::Result<()> {
             .service(crate::api::assets::get)
             .service(crate::api::homedir::post)
             .service(crate::api::index::get)
+            .service(crate::api::readdir::post)
             .service(crate::api::upload::post);
     })
     .bind(addr)?
