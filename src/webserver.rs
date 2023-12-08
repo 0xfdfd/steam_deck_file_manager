@@ -53,7 +53,8 @@ pub async fn new(config: Config) -> std::io::Result<()> {
             .app_data(ext_data)
             .service(crate::api::assets::get)
             .service(crate::api::homedir::post)
-            .service(crate::api::index::get);
+            .service(crate::api::index::get)
+            .service(crate::api::upload::post);
     })
     .bind(addr)?
     .run()

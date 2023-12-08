@@ -2,14 +2,24 @@
 
 CARGO_BUILD_FLAGS=""
 WASM_PACK_BUILD_FLAGS="--dev"
+BUILD_BACKEND=true
+BUILD_FRONTEND=true
 RUN=false
 
 while test $# -gt 0; do
   case "$1" in
     -h|--help)
-      echo "build.sh --release"
+      echo "Usage: build.sh [OPTION]"
       echo ""
-      echo "  --release: Build with --release"
+      echo "Options:"
+      echo "      --release"
+      echo "        Build with release mode."
+      echo "      --frontend"
+      echo "        Only build frontend."
+      echo "      --run"
+      echo "        Also run web server."
+      echo "  -h, --help"
+      echo "        Print help."
       exit 0
       ;;
 
@@ -17,6 +27,12 @@ while test $# -gt 0; do
       shift
       CARGO_BUILD_FLAGS="--release"
       WASM_PACK_BUILD_FLAGS="--release"
+      ;;
+
+    --frontend)
+      shift
+      BUILD_BACKEND=false
+      BUILD_FRONTEND=true
       ;;
 
     --run)
@@ -39,10 +55,14 @@ if ! [ -x "$(command -v wasm-bindgen)" ]; then
 fi
 
 # Build frontend
-(cd frontend && cargo fmt && wasm-pack build ${WASM_PACK_BUILD_FLAGS} --no-typescript --no-pack --target web)
+if [[ "${BUILD_FRONTEND}" = true ]]; then
+  (cd frontend && cargo fmt && wasm-pack build ${WASM_PACK_BUILD_FLAGS} --no-typescript --no-pack --target web)
+fi
 
 # Build backend
-(cargo fmt && cargo build ${CARGO_BUILD_FLAGS})
+if [[ "${BUILD_BACKEND}" = true ]]; then
+  (cargo fmt && cargo build ${CARGO_BUILD_FLAGS})
+fi
 
 # Run
 if [[ "${RUN}" = "true" ]]; then

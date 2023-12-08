@@ -1,11 +1,10 @@
-use wasm_bindgen::JsCast;
-
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct WebUiImpl {
     label: String,
     value: f32,
 
     homedir: Option<String>,
+    currdir: Option<String>,
 }
 
 #[derive(Clone)]
@@ -24,7 +23,17 @@ impl WebUI {
             ctx = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
 
-        Self(std::sync::Arc::new(std::sync::RwLock::new(ctx)))
+        let ctx = WebUI(std::sync::Arc::new(std::sync::RwLock::new(ctx)));
+
+        let ctx2 = ctx.clone();
+        fetch_post("/api/homedir", move |json| {
+            let homedir = json.unwrap()["path"].as_str().unwrap().to_string();
+
+            ctx2.0.write().unwrap().homedir = Some(homedir.clone());
+            ctx2.0.write().unwrap().currdir = Some(homedir.clone());
+        });
+
+        return ctx;
     }
 }
 
@@ -49,38 +58,15 @@ impl eframe::App for WebUI {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
 
-            egui::menu::bar(ui, |ui| {
-                // NOTE: no File->Quit on web pages!
-                let is_web = cfg!(target_arch = "wasm32");
-                if !is_web {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-                    ui.add_space(16.0);
-                }
-
+            ui.horizontal(|ui| {
                 egui::widgets::global_dark_light_mode_buttons(ui);
+
+                if let Some(homedir) = &self.0.read().unwrap().homedir {
+                    let txt = format!("homedir: {}", homedir);
+                    ui.label(txt);
+                }
             });
-
-            if ui.button("Home").clicked() {
-                log::info!("Home button clicked");
-
-                let ctx = self.clone();
-
-                fetch_post("/api/homedir", move |json| {
-                    ctx.0.write().unwrap().homedir = Some(json.unwrap().to_string());
-                });
-            }
-
-            if self.0.read().unwrap().homedir.is_some() {
-                let txt = format!(
-                    "homedir: {}",
-                    self.0.read().unwrap().homedir.as_ref().unwrap()
-                );
-                ui.label(txt);
-            }
+            upload_file(self, ui);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -112,6 +98,30 @@ impl eframe::App for WebUI {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+fn upload_file(web: &mut WebUI, ui: &mut egui::Ui) {
+    if ui.button("Open File").clicked() {
+        let curpath = web.0.read().unwrap().currdir.clone().unwrap();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Some(file) = rfd::AsyncFileDialog::new().pick_file().await {
+                let upload_path = format!("/upload?path={}", curpath);
+
+                let formdata = web_sys::FormData::new().unwrap();
+                formdata.append_with_blob("file", file.inner()).unwrap();
+
+                let xhr = web_sys::XmlHttpRequest::new().unwrap();
+                xhr.open("POST", upload_path.as_str()).unwrap();
+
+                xhr.send_with_opt_form_data(Some(&formdata)).unwrap();
+            }
+        });
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn upload_file(_web: &mut WebUI, _ui: &mut egui::Ui) {}
+
 fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -126,10 +136,12 @@ fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
     });
 }
 
-fn fetch_post<F>(url: &str, mut func: F)
+fn fetch_post<F>(url: &str, func: F)
 where
-    F: FnMut(Result<serde_json::Value, String>) + 'static,
+    F: FnOnce(Result<serde_json::Value, String>) + 'static,
 {
+    use wasm_bindgen::JsCast;
+
     let window = web_sys::window().unwrap();
 
     let mut opt = web_sys::RequestInit::new();
