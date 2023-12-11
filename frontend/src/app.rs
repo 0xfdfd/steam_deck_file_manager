@@ -1,3 +1,8 @@
+#[derive(Debug, Clone)]
+pub struct WebUiConfig {
+    pub host: String,
+}
+
 #[derive(Clone)]
 pub struct WebUI {
     label: String,
@@ -7,11 +12,11 @@ pub struct WebUI {
 }
 
 impl WebUI {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>, config: WebUiConfig) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
-        let file_explorer = crate::widget::file_explorer::new();
+        let file_explorer = crate::widget::file_explorer::new(config.host.as_str());
 
         return WebUI {
             label: "".to_string(),

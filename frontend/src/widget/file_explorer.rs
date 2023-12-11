@@ -1,12 +1,14 @@
-#[derive(Debug)]
 struct FileExplorerImpl {
     homedir: Option<String>,
     cwd: Option<String>,
     filelist: Option<ReaddirResponse>,
 }
 
-#[derive(Debug, Clone)]
-pub struct FileExplorer(std::sync::Arc<std::sync::RwLock<FileExplorerImpl>>);
+#[derive(Clone)]
+pub struct FileExplorer {
+    client: std::sync::Arc<crate::http_client::HttpClient>,
+    iner: std::sync::Arc<std::sync::RwLock<FileExplorerImpl>>,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReaddirItem {
@@ -36,23 +38,28 @@ pub struct ReaddirResponse {
     pub entries: Vec<ReaddirItem>,
 }
 
-pub fn new() -> FileExplorer {
+pub fn new(host: &str) -> FileExplorer {
+    let client = crate::http_client::new(host);
+
     let iner = FileExplorerImpl {
         homedir: None,
         cwd: None,
         filelist: None,
     };
 
-    let outter = FileExplorer(std::sync::Arc::new(std::sync::RwLock::new(iner)));
+    let outter = FileExplorer {
+        client: std::sync::Arc::new(client),
+        iner: std::sync::Arc::new(std::sync::RwLock::new(iner)),
+    };
 
     let explorer = outter.clone();
-    crate::fetch_post("/api/homedir", None, move |json| {
+    outter.client.post("/api/homedir", None, move |json| {
         let value = json.unwrap();
         let homedir = value["path"].as_str().unwrap().to_string();
 
         // Update homedir and cwd.
         {
-            let mut guard = explorer.0.write().unwrap();
+            let mut guard = explorer.iner.write().unwrap();
             guard.homedir = Some(homedir.clone());
             guard.cwd = Some(homedir.clone());
         }
@@ -79,7 +86,7 @@ impl FileExplorer {
     fn ui(&self, ui: &mut egui::Ui) {
         self.ui_top_panel(ui);
 
-        if let Some(filelist) = &self.0.read().unwrap().filelist {
+        if let Some(filelist) = &self.iner.read().unwrap().filelist {
             for item in &filelist.entries {
                 ui.label(item.f_name.clone());
             }
@@ -87,13 +94,11 @@ impl FileExplorer {
     }
 
     fn ui_top_panel(&self, ui: &mut egui::Ui) {
-        egui::TopBottomPanel::top("top_panel").show_inside(ui, |ui| {
+        egui::TopBottomPanel::top("file_explorer_top_panel").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
-                log::debug!("before ui_top_panel");
-
                 if ui.button("Home").clicked() {
                     {
-                        let mut guard = self.0.write().unwrap();
+                        let mut guard = self.iner.write().unwrap();
                         guard.cwd = guard.homedir.clone();
                     }
 
@@ -107,7 +112,7 @@ impl FileExplorer {
                         if let Some(file) = rfd::AsyncFileDialog::new().pick_file().await {
                             let upload_path = format!(
                                 "/upload?path={}",
-                                explorer.0.read().unwrap().cwd.clone().unwrap()
+                                explorer.iner.read().unwrap().cwd.clone().unwrap()
                             );
 
                             let xhr = web_sys::XmlHttpRequest::new().unwrap();
@@ -121,11 +126,9 @@ impl FileExplorer {
                     });
                 }
 
-                if let Some(cwd) = &self.0.read().unwrap().cwd {
+                if let Some(cwd) = &self.iner.read().unwrap().cwd {
                     ui.label(cwd);
                 };
-
-                log::debug!("after ui_top_panel");
             });
         });
     }
@@ -141,12 +144,12 @@ impl FileExplorer {
         let path = path.to_string();
 
         let body = serde_json::json!({ "path": path });
-        crate::fetch_post("/api/readdir", Some(&body), move |json| {
+        self.client.post("/api/readdir", Some(&body), move |json| {
             let value = json.unwrap();
             let rsp: ReaddirResponse = serde_json::from_value(value).unwrap();
 
             {
-                let mut guard = explorer.0.write().unwrap();
+                let mut guard = explorer.iner.write().unwrap();
                 guard.cwd = Some(path);
                 guard.filelist = Some(rsp);
             }
@@ -156,7 +159,7 @@ impl FileExplorer {
     fn refresh(&self) {
         let mut cwd: Option<String> = None;
         {
-            let guard = self.0.read().unwrap();
+            let guard = self.iner.read().unwrap();
             if let Some(v) = &guard.cwd {
                 cwd = Some(v.clone());
             }

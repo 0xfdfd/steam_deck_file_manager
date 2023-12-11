@@ -43,10 +43,10 @@ impl BackendData {
 ///
 /// + `ip`: The ip to bind to.
 /// + `port`: The port to bind to.
-pub async fn new(config: Config) -> std::io::Result<()> {
+pub fn new(config: Config) -> Result<actix_web::dev::Server, std::io::Error> {
     let addr = format!("{}:{}", config.ip, config.port);
 
-    actix_web::HttpServer::new(move || {
+    let srv = actix_web::HttpServer::new(move || {
         let ext_data = actix_web::web::Data::new(BackendData::new(config.clone()));
 
         return actix_web::App::new()
@@ -57,7 +57,12 @@ pub async fn new(config: Config) -> std::io::Result<()> {
             .service(crate::api::readdir::post)
             .service(crate::api::upload::post);
     })
-    .bind(addr)?
-    .run()
-    .await
+    .bind(addr);
+
+    let srv = match srv {
+        Ok(v) => v.run(),
+        Err(e) => return Err(e),
+    };
+
+    return Ok(srv);
 }

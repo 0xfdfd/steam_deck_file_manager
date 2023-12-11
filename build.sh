@@ -5,6 +5,7 @@ WASM_PACK_BUILD_FLAGS="--dev"
 BUILD_BACKEND=true
 BUILD_FRONTEND=true
 RUN=false
+RUN_OPT="--"
 
 while test $# -gt 0; do
   case "$1" in
@@ -17,7 +18,9 @@ while test $# -gt 0; do
       echo "      --frontend"
       echo "        Only build frontend."
       echo "      --run"
-      echo "        Also run web server."
+      echo "        Also run program."
+      echo "      --no-gui"
+      echo "        Don't start the gui."
       echo "  -h, --help"
       echo "        Print help."
       exit 0
@@ -38,6 +41,11 @@ while test $# -gt 0; do
     --run)
       shift
       RUN=true
+      ;;
+
+    --no-gui)
+      shift
+      RUN_OPT+=" --no-gui"
       ;;
 
   esac
@@ -66,6 +74,6 @@ fi
 
 # Run
 if [[ "${RUN}" = "true" ]]; then
-  (cargo run ${CARGO_BUILD_FLAGS})
+  (cargo run ${CARGO_BUILD_FLAGS} ${RUN_OPT})
 fi
 

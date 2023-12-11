@@ -18,8 +18,8 @@
   <link rel="modulepreload" href="/assets/{{wasm_name}}.js" />
 
   <head>
-    <title>egui – An immediate mode GUI written in Rust</title>
-    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+    <title>Steam Deck File Manager</title>
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
     <style>
       html {
         /* Remove touch delay: */
@@ -118,7 +118,8 @@
     <script type="module">
       import init, { start_ui } from "/assets/{{wasm_name}}.js";
       init().then(() => {
-        start_ui("the_canvas_id").then(() => {
+        var host = window.location.protocol + "//" + window.location.host;
+        start_ui("the_canvas_id", host).then(() => {
           document.getElementById("center_text").innerHTML = "";
         });
       });
