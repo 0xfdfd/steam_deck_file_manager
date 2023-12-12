@@ -10,7 +10,9 @@ target/
 *.pdb
 
 # vscode
-.vscode
+/.vscode/*
+!/.vscode/launch.json
+!/.vscode/tasks.json
 
 # Helix editor configuration
 .helix

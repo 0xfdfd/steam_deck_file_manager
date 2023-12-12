@@ -1,0 +1,126 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Format Source Code",
+            "command": "cargo",
+            "args": [
+                "fmt"
+            ],
+            "presentation": {
+                "clear": false
+            }
+        },
+        {
+            "label": "Build Frontend (Debug)",
+            "command": "wasm-pack",
+            "args": [
+                "build",
+                "--dev",
+                "--no-typescript",
+                "--no-pack",
+                "--target",
+                "web"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/frontend"
+            },
+            "dependsOn": [
+                "Format Source Code"
+            ],
+            "presentation": {
+                "clear": true
+            }
+        },
+        {
+            "label": "Build Frontend (Release)",
+            "command": "wasm-pack",
+            "args": [
+                "build",
+                "--release",
+                "--no-typescript",
+                "--no-pack",
+                "--target",
+                "web"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/frontend"
+            },
+            "dependsOn": [
+                "Format Source Code"
+            ],
+            "presentation": {
+                "clear": true
+            }
+        },
+        {
+            "label": "Build Backend (Debug)",
+            "command": "cargo",
+            "args": [
+                "build"
+            ],
+            "dependsOn": [
+                "Format Source Code"
+            ],
+            "presentation": {
+                "clear": true
+            }
+        },
+        {
+            "label": "Build Backend (Release)",
+            "command": "cargo",
+            "args": [
+                "build",
+                "--release"
+            ],
+            "dependsOn": [
+                "Format Source Code"
+            ],
+            "presentation": {
+                "clear": true
+            }
+        },
+        {
+            "label": "Build (Debug)",
+            "dependsOn": [
+                "Build Frontend (Debug)",
+                "Build Backend (Debug)"
+            ],
+            "presentation": {
+                "clear": true
+            }
+        },
+        {
+            "label": "Build (Release)",
+            "dependsOn": [
+                "Build Frontend (Release)",
+                "Build Backend (Release)"
+            ],
+            "presentation": {
+                "clear": true
+            }
+        },
+        {
+            "label": "Run (Debug)",
+            "command": "cargo",
+            "args": [
+                "run"
+            ],
+            "dependsOn": [
+                "Build (Debug)"
+            ]
+        },
+        {
+            "label": "Run (Release)",
+            "command": "cargo",
+            "args": [
+                "run",
+            ],
+            "dependsOn": [
+                "Build (Release)"
+            ]
+        }
+    ]
+}
