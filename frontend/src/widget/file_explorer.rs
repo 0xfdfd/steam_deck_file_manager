@@ -38,6 +38,12 @@ pub struct ReaddirResponse {
     pub entries: Vec<ReaddirItem>,
 }
 
+impl ReaddirResponse {
+    pub fn sort(&mut self) {
+        self.entries.sort_by(|a, b| a.f_type.cmp(&b.f_type));
+    }
+}
+
 pub fn new(host: &str) -> FileExplorer {
     let client = crate::http_client::new(host);
 
@@ -71,26 +77,25 @@ pub fn new(host: &str) -> FileExplorer {
 }
 
 impl FileExplorer {
-    pub fn show(&self, ctx: &egui::Context) {
+    /// Show the file explorer.
+    ///
+    /// # Returns
+    /// Whether the window is open or not.
+    pub fn show(&self, ctx: &egui::Context) -> bool {
         let mut open = true;
 
         egui::Window::new("File Explorer")
             .open(&mut open)
-            .default_height(800.0)
-            .default_width(1280.0)
             .show(ctx, |ui| {
                 self.ui(ui);
             });
+
+        return open;
     }
 
     fn ui(&self, ui: &mut egui::Ui) {
         self.ui_top_panel(ui);
-
-        if let Some(filelist) = &self.iner.read().unwrap().filelist {
-            for item in &filelist.entries {
-                ui.label(item.f_name.clone());
-            }
-        }
+        self.ui_body_panel(ui);
     }
 
     fn ui_top_panel(&self, ui: &mut egui::Ui) {
@@ -133,6 +138,48 @@ impl FileExplorer {
         });
     }
 
+    fn ui_body_panel(&self, ui: &mut egui::Ui) {
+        egui_extras::TableBuilder::new(ui)
+            .column(egui_extras::Column::remainder().resizable(true))
+            .column(egui_extras::Column::exact(64.0).resizable(false))
+            .column(egui_extras::Column::exact(64.0).resizable(false))
+            .column(egui_extras::Column::exact(128.0).resizable(false))
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.heading("Name");
+                });
+                header.col(|ui| {
+                    ui.heading("Type");
+                });
+                header.col(|ui| {
+                    ui.heading("Size");
+                });
+                header.col(|ui| {
+                    ui.heading("Modified");
+                });
+            })
+            .body(|body| {
+                if let Some(filelist) = &self.iner.read().unwrap().filelist {
+                    body.rows(20.0, filelist.entries.len(), |idx, mut row| {
+                        let item = &filelist.entries[idx];
+                        row.col(|ui| {
+                            let label = egui::Label::new(item.f_name.clone()).truncate(true);
+                            ui.add(label);
+                        });
+                        row.col(|ui| {
+                            ui.label(item.f_type.clone());
+                        });
+                        row.col(|ui| {
+                            ui.label(format_size(item.f_size));
+                        });
+                        row.col(|ui| {
+                            ui.label(convert_epoch_to_local_time(item.f_modified));
+                        });
+                    });
+                }
+            });
+    }
+
     /// Read the directory and show contents.
     ///
     /// Note: The cwd is changed to the `path`.
@@ -146,7 +193,8 @@ impl FileExplorer {
         let body = serde_json::json!({ "path": path });
         self.client.post("/api/readdir", Some(&body), move |json| {
             let value = json.unwrap();
-            let rsp: ReaddirResponse = serde_json::from_value(value).unwrap();
+            let mut rsp: ReaddirResponse = serde_json::from_value(value).unwrap();
+            rsp.sort();
 
             {
                 let mut guard = explorer.iner.write().unwrap();
@@ -169,4 +217,31 @@ impl FileExplorer {
             self.readdir(v.as_str());
         };
     }
+}
+
+/// Convert size in bytes into a human-readable format.
+fn format_size(size: u64) -> String {
+    let units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+    let mut size = size as f64;
+    let mut index = 0;
+
+    while size >= 1024.0 && index < units.len() - 1 {
+        size /= 1024.0;
+        index += 1;
+    }
+
+    return format!("{:.2} {}", size, units[index]);
+}
+
+fn convert_epoch_to_local_time(epoch: u64) -> String {
+    // Create a NaiveDateTime from the timestamp
+    let naive_datetime = chrono::NaiveDateTime::from_timestamp_opt(epoch as i64, 0).unwrap();
+
+    // Convert it to UTC DateTime, then to local timezone
+    let datetime_utc: chrono::DateTime<chrono::Utc> =
+        chrono::DateTime::from_naive_utc_and_offset(naive_datetime, chrono::Utc);
+    let datetime_local = datetime_utc.with_timezone(&chrono::Local);
+
+    // Format the datetime to a string in a human-readable format
+    datetime_local.format("%Y-%m-%d %H:%M:%S").to_string()
 }

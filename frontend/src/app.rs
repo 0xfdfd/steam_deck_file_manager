@@ -8,7 +8,7 @@ pub struct WebUI {
     label: String,
     value: f32,
 
-    file_explorer: crate::widget::file_explorer::FileExplorer,
+    file_explorer: Option<crate::widget::file_explorer::FileExplorer>,
 }
 
 impl WebUI {
@@ -21,7 +21,7 @@ impl WebUI {
         return WebUI {
             label: "".to_string(),
             value: 0.0,
-            file_explorer: file_explorer,
+            file_explorer: Some(file_explorer),
         };
     }
 }
@@ -34,7 +34,11 @@ impl std::fmt::Debug for WebUI {
 
 impl eframe::App for WebUI {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.file_explorer.show(ctx);
+        if let Some(fe) = &self.file_explorer {
+            if fe.show(ctx) == false {
+                self.file_explorer = None;
+            }
+        }
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
