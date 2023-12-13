@@ -1,5 +1,6 @@
 pub mod app;
 pub mod http_client;
+pub mod protocol;
 pub mod widget;
 
 #[cfg(target_arch = "wasm32")]

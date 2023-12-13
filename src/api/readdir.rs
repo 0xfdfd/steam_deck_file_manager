@@ -1,8 +1,3 @@
-#[derive(serde::Deserialize)]
-struct ReaddirRequest {
-    path: String,
-}
-
 /// List a directory.
 ///
 ///
@@ -37,7 +32,7 @@ struct ReaddirRequest {
 /// ```
 #[actix_web::post("/api/readdir")]
 pub async fn post(
-    info: actix_web::web::Json<ReaddirRequest>,
+    info: actix_web::web::Json<frontend::protocol::ReaddirRequest>,
 ) -> actix_web::Result<impl actix_web::Responder> {
     let path = &info.path;
     let ret = listdir(path.as_str()).await?;
@@ -45,16 +40,14 @@ pub async fn post(
     Ok(actix_web::web::Json(ret))
 }
 
-async fn listdir(
-    path: &str,
-) -> Result<frontend::widget::file_explorer::ReaddirResponse, std::io::Error> {
-    let mut ret = Vec::<frontend::widget::file_explorer::ReaddirItem>::new();
+async fn listdir(path: &str) -> Result<frontend::protocol::ReaddirResponse, std::io::Error> {
+    let mut ret = Vec::<frontend::protocol::ReaddirResponseItem>::new();
     let mut entries = tokio::fs::read_dir(path).await?;
 
     while let Some(entry) = entries.next_entry().await? {
         let metadata = entry.metadata().await?;
 
-        ret.push(frontend::widget::file_explorer::ReaddirItem {
+        ret.push(frontend::protocol::ReaddirResponseItem {
             f_name: entry.file_name().to_str().unwrap().to_string(),
             f_path: entry.path().to_str().unwrap().to_string(),
             f_type: if entry.file_type().await?.is_dir() {
@@ -73,5 +66,5 @@ async fn listdir(
         });
     }
 
-    return Ok(frontend::widget::file_explorer::ReaddirResponse { entries: ret });
+    return Ok(frontend::protocol::ReaddirResponse { entries: ret });
 }

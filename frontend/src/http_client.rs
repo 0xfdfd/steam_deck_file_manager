@@ -26,14 +26,16 @@ pub fn new(host: &str) -> HttpClient {
 }
 
 impl HttpClient {
-    pub fn post<F>(&self, path: &str, body: Option<&serde_json::Value>, func: F)
+    pub fn post<T, F, R>(&self, req: &T, func: F)
     where
-        F: FnOnce(Result<serde_json::Value, String>) + Send + 'static,
+        T: crate::protocol::Request + ?Sized,
+        F: FnOnce(Result<R, String>) + Send + 'static,
+        R: crate::protocol::Response,
     {
-        let url = self.url(path);
+        let url = self.url(req.url());
         let mut rs = reqwest::Client::new().post(url);
-        if let Some(body) = body {
-            rs = rs.json(body);
+        if let Some(body) = req.to_json() {
+            rs = rs.json(&body);
         };
 
         self.spawn(async move {
@@ -60,7 +62,8 @@ impl HttpClient {
                 return;
             }
 
-            let val: serde_json::Value = serde_json::from_str(body.as_str()).unwrap();
+            let val: R = R::from_json(body.as_str());
+
             func(Ok(val));
         });
     }

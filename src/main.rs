@@ -12,9 +12,6 @@ struct BackendConfig {
     #[arg(long, default_value = "5000", help = "The port to bind to.")]
     port: u16,
 
-    #[arg(long, help = "The path to the home directory.")]
-    homedir: Option<String>,
-
     #[arg(long, default_value = "false", help = "Don't start the gui.")]
     no_gui: bool,
 }
@@ -48,7 +45,6 @@ fn main() {
     let web_config = webserver::Config {
         ip: config.ip.clone(),
         port: config.port,
-        homedir: config.homedir.clone(),
     };
     rt.spawn(crate::webserver::new(web_config).unwrap());
 

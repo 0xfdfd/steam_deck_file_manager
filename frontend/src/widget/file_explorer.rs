@@ -1,47 +1,13 @@
 struct FileExplorerImpl {
     homedir: Option<String>,
     cwd: Option<String>,
-    filelist: Option<ReaddirResponse>,
+    filelist: Option<crate::protocol::ReaddirResponse>,
 }
 
 #[derive(Clone)]
 pub struct FileExplorer {
     client: std::sync::Arc<crate::http_client::HttpClient>,
     iner: std::sync::Arc<std::sync::RwLock<FileExplorerImpl>>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ReaddirItem {
-    /// The name of the file.
-    #[serde(rename = "name")]
-    pub f_name: String,
-
-    /// The absolute path to the file.
-    #[serde(rename = "path")]
-    pub f_path: String,
-
-    /// The type of the file, 'FILE' or 'DIR'.
-    #[serde(rename = "type")]
-    pub f_type: String,
-
-    /// The size of the file in bytes.
-    #[serde(rename = "size")]
-    pub f_size: u64,
-
-    /// The last modified time of the file in seconds.
-    #[serde(rename = "modified")]
-    pub f_modified: u64,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ReaddirResponse {
-    pub entries: Vec<ReaddirItem>,
-}
-
-impl ReaddirResponse {
-    pub fn sort(&mut self) {
-        self.entries.sort_by(|a, b| a.f_type.cmp(&b.f_type));
-    }
 }
 
 pub fn new(host: &str) -> FileExplorer {
@@ -58,20 +24,27 @@ pub fn new(host: &str) -> FileExplorer {
         iner: std::sync::Arc::new(std::sync::RwLock::new(iner)),
     };
 
+    let req = crate::protocol::DirsRequest {
+        kind: crate::protocol::DirsRequestKind::HomeDir,
+    };
+
     let explorer = outter.clone();
-    outter.client.post("/api/homedir", None, move |json| {
-        let value = json.unwrap();
-        let homedir = value["path"].as_str().unwrap().to_string();
+    outter.client.post(
+        &req,
+        move |rsp: Result<crate::protocol::DirsResponse, String>| {
+            let rsp = rsp.unwrap();
+            let homedir = rsp.path.unwrap();
 
-        // Update homedir and cwd.
-        {
-            let mut guard = explorer.iner.write().unwrap();
-            guard.homedir = Some(homedir.clone());
-            guard.cwd = Some(homedir.clone());
-        }
+            // Update homedir and cwd.
+            {
+                let mut guard = explorer.iner.write().unwrap();
+                guard.homedir = Some(homedir.clone());
+                guard.cwd = Some(homedir.clone());
+            }
 
-        explorer.refresh();
-    });
+            explorer.refresh();
+        },
+    );
 
     return outter;
 }
@@ -190,18 +163,21 @@ impl FileExplorer {
         let explorer = self.clone();
         let path = path.to_string();
 
-        let body = serde_json::json!({ "path": path });
-        self.client.post("/api/readdir", Some(&body), move |json| {
-            let value = json.unwrap();
-            let mut rsp: ReaddirResponse = serde_json::from_value(value).unwrap();
-            rsp.sort();
+        let req = crate::protocol::ReaddirRequest { path: path.clone() };
 
-            {
-                let mut guard = explorer.iner.write().unwrap();
-                guard.cwd = Some(path);
-                guard.filelist = Some(rsp);
-            }
-        });
+        self.client.post(
+            &req,
+            move |rsp: Result<crate::protocol::ReaddirResponse, String>| {
+                let mut rsp = rsp.unwrap();
+                rsp.sort();
+
+                {
+                    let mut guard = explorer.iner.write().unwrap();
+                    guard.cwd = Some(path);
+                    guard.filelist = Some(rsp);
+                }
+            },
+        );
     }
 
     fn refresh(&self) {

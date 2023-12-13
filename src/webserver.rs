@@ -2,16 +2,14 @@
 pub struct Config {
     pub ip: String,
     pub port: u16,
-    pub homedir: Option<String>,
 }
 
 pub struct BackendData {
     pub render: handlebars::Handlebars<'static>,
-    pub homedir: String,
 }
 
 impl BackendData {
-    pub fn new(config: Config) -> Self {
+    pub fn new() -> Self {
         let mut handlebars = handlebars::Handlebars::new();
         {
             let file = crate::assets::get("index.html").unwrap();
@@ -21,19 +19,7 @@ impl BackendData {
                 .unwrap();
         }
 
-        let homedir = match config.homedir {
-            Some(v) => v,
-            None => home::home_dir()
-                .expect("unable to get homedir")
-                .to_str()
-                .unwrap()
-                .to_string(),
-        };
-
-        return BackendData {
-            render: handlebars,
-            homedir: homedir,
-        };
+        return BackendData { render: handlebars };
     }
 }
 
@@ -47,12 +33,12 @@ pub fn new(config: Config) -> Result<actix_web::dev::Server, std::io::Error> {
     let addr = format!("{}:{}", config.ip, config.port);
 
     let srv = actix_web::HttpServer::new(move || {
-        let ext_data = actix_web::web::Data::new(BackendData::new(config.clone()));
+        let ext_data = actix_web::web::Data::new(BackendData::new());
 
         return actix_web::App::new()
             .app_data(ext_data)
             .service(crate::api::assets::get)
-            .service(crate::api::homedir::post)
+            .service(crate::api::dirs::post)
             .service(crate::api::index::get)
             .service(crate::api::readdir::post)
             .service(crate::api::upload::post);
