@@ -107,15 +107,23 @@ impl WebUI {
             egui::widgets::global_dark_light_mode_buttons(ui);
 
             // Home.
-            if ui.button("🏠").clicked() {
-                if let Some(path) = &self.homedir {
-                    self.cd(ctx, path.as_str());
+            {
+                let btn = egui::Button::new("🏠");
+                let rsp = ui.add(btn).on_hover_text("Goto Home");
+                if rsp.clicked() {
+                    if let Some(path) = &self.homedir {
+                        self.cd(ctx, path.as_str());
+                    }
                 }
             }
 
             // Refresh.
-            if ui.button("🔃").clicked() {
-                self.refresh(ctx);
+            {
+                let btn = egui::Button::new("🔃");
+                let rsp = ui.add(btn).on_hover_text("Refresh");
+                if rsp.clicked() {
+                    self.refresh(ctx);
+                }
             }
 
             if let Some(cwd) = &self.cwd {
