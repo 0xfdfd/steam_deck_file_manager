@@ -26,9 +26,46 @@ pub fn new(host: &str) -> HttpClient {
 }
 
 impl HttpClient {
-    pub fn post<T, F, R>(&self, req: &T, func: F)
+    /// Get the resource at the given path.
+    ///
+    /// # Arguments
+    /// + `path` - The path to the resource.
+    /// + `func` - The function to call with the resource.
+    pub fn get<F>(&self, path: &str, func: F)
     where
-        T: crate::protocol::Request + ?Sized,
+        F: FnOnce(Result<Vec<u8>, String>) + Send + 'static,
+    {
+        let url = self.url(path);
+        self.spawn(async move {
+            let body = match reqwest::get(url).await {
+                Ok(v) => v,
+                Err(e) => {
+                    func(Err(e.to_string()));
+                    return;
+                }
+            };
+
+            let body = match body.bytes().await {
+                Ok(v) => v,
+                Err(e) => {
+                    func(Err(e.to_string()));
+                    return;
+                }
+            };
+
+            let body = body.to_vec();
+            func(Ok(body));
+        });
+    }
+
+    /// Post the given request and call the given function with the response.
+    ///
+    /// # Arguments
+    /// + `req` - The request to send.
+    /// + `func` - The function to call with the response.
+    pub fn post<T, F, R>(&self, req: T, func: F)
+    where
+        T: crate::protocol::Request,
         F: FnOnce(Result<R, String>) + Send + 'static,
         R: crate::protocol::Response,
     {

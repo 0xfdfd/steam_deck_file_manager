@@ -5,6 +5,8 @@ pub struct WebUiConfig {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 enum WebUiMessage {
+    /// Set font.
+    ActFont((String, Vec<u8>)),
     /// Set the home directory and refresh.
     ActCWD(String),
     /// Set the home directory.
@@ -61,7 +63,7 @@ impl eframe::App for WebUI {
         // Due to update is trigger at redraw, you need to call [`egui::Context::request_repaint`] to
         // ensure the update function is executed in time.
         if let Ok(msg) = self.rx.try_recv() {
-            self.rx(ctx, msg);
+            self.updated(ctx, msg);
         }
 
         // Update view.
@@ -70,8 +72,47 @@ impl eframe::App for WebUI {
 }
 
 impl WebUI {
-    fn rx(&mut self, ctx: &egui::Context, msg: WebUiMessage) {
+    fn init(&self, ctx: &egui::Context) {
+        // Fetch font.
+        {
+            let font_name = "LXGWWenKai-Regular.ttf";
+            let font_name_path = format!("/assets/{}", font_name);
+
+            let ctx = ctx.clone();
+            let tx = self.tx.clone();
+            self.client.get(font_name_path.as_str(), move |data| {
+                let data = data.unwrap();
+                tx.send(WebUiMessage::ActFont((font_name.to_string(), data)))
+                    .unwrap();
+                ctx.request_repaint();
+            });
+        }
+
+        // Fetch homedir
+        {
+            let tx = self.tx.clone();
+            let ctx = ctx.clone();
+            self.client.post(
+                crate::protocol::DirsRequest {
+                    kind: crate::protocol::DirsRequestKind::HomeDir,
+                },
+                move |rsp: Result<crate::protocol::DirsResponse, String>| {
+                    let rsp = rsp.unwrap();
+                    let homedir = rsp.path.unwrap();
+
+                    tx.send(WebUiMessage::SetHomeDir(homedir.clone())).unwrap();
+                    tx.send(WebUiMessage::ActCWD(homedir.clone())).unwrap();
+                    ctx.request_repaint();
+                },
+            );
+        }
+    }
+
+    fn updated(&mut self, ctx: &egui::Context, msg: WebUiMessage) {
         match msg {
+            WebUiMessage::ActFont((name, data)) => {
+                self.install_font(ctx, name, data);
+            }
             WebUiMessage::ActCWD(path) => {
                 self.cd(ctx, path.as_str());
             }
@@ -209,23 +250,28 @@ impl WebUI {
             });
     }
 
-    fn init(&self, ctx: &egui::Context) {
-        let req = crate::protocol::DirsRequest {
-            kind: crate::protocol::DirsRequestKind::HomeDir,
-        };
-        let tx = self.tx.clone();
-        let ctx = ctx.clone();
-        self.client.post(
-            &req,
-            move |rsp: Result<crate::protocol::DirsResponse, String>| {
-                let rsp = rsp.unwrap();
-                let homedir = rsp.path.unwrap();
+    fn install_font(&self, ctx: &egui::Context, name: String, data: Vec<u8>) {
+        // Install my own font. `.ttf` and `.otf` files supported.
+        let mut fonts = egui::FontDefinitions::default();
+        let font = egui::FontData::from_owned(data);
+        fonts.font_data.insert(name.clone(), font);
 
-                tx.send(WebUiMessage::SetHomeDir(homedir.clone())).unwrap();
-                tx.send(WebUiMessage::ActCWD(homedir.clone())).unwrap();
-                ctx.request_repaint();
-            },
-        );
+        // Put my font first (highest priority) for proportional text
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, name.clone());
+
+        // Put my font as last fallback for monospace
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .push(name.clone());
+
+        // Tell egui to use these fonts.
+        ctx.set_fonts(fonts);
     }
 
     /// Refresh current directory.
@@ -241,12 +287,11 @@ impl WebUI {
     /// + `path`: path to change to.
     fn cd(&self, ctx: &egui::Context, path: &str) {
         let path = path.to_string();
-        let req = crate::protocol::ReaddirRequest { path: path.clone() };
 
         let ctx = ctx.clone();
         let tx = self.tx.clone();
         self.client.post(
-            &req,
+            crate::protocol::ReaddirRequest { path: path.clone() },
             move |rsp: Result<crate::protocol::ReaddirResponse, String>| {
                 let mut rsp = rsp.unwrap();
                 rsp.sort();
