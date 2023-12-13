@@ -1,7 +1,6 @@
 pub mod app;
 pub mod http_client;
 pub mod protocol;
-pub mod widget;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -28,7 +27,8 @@ pub fn start_ui(app_name: &str, host: &str) -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([1280.0, 800.0]),
+            .with_min_inner_size([1280.0, 800.0])
+            .with_resizable(false),
         ..Default::default()
     };
 

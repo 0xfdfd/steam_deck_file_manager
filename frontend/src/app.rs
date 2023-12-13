@@ -3,12 +3,27 @@ pub struct WebUiConfig {
     pub host: String,
 }
 
-#[derive(Clone)]
-pub struct WebUI {
-    label: String,
-    value: f32,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum WebUiMessage {
+    /// Set the home directory and refresh.
+    ActCWD(String),
+    /// Set the home directory.
+    SetHomeDir(String),
+    /// Set current working directory.
+    SetCWD(String),
+    /// Set file list.
+    SetFileList(crate::protocol::ReaddirResponse),
+}
 
-    file_explorer: Option<crate::widget::file_explorer::FileExplorer>,
+pub struct WebUI {
+    inited: bool,
+    homedir: Option<String>,
+    cwd: Option<String>,
+    filelist: Option<crate::protocol::ReaddirResponse>,
+
+    client: crate::http_client::HttpClient,
+    tx: std::sync::Arc<std::sync::mpsc::Sender<WebUiMessage>>,
+    rx: std::sync::mpsc::Receiver<WebUiMessage>,
 }
 
 impl WebUI {
@@ -16,64 +31,223 @@ impl WebUI {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
-        let file_explorer = crate::widget::file_explorer::new(config.host.as_str());
+        let (tx, rx) = std::sync::mpsc::channel::<WebUiMessage>();
 
-        return WebUI {
-            label: "".to_string(),
-            value: 0.0,
-            file_explorer: Some(file_explorer),
+        let client = crate::http_client::new(config.host.as_str());
+        let ui = WebUI {
+            inited: false,
+            homedir: None,
+            cwd: None,
+            filelist: None,
+
+            client: client,
+            tx: std::sync::Arc::new(tx),
+            rx: rx,
         };
-    }
-}
 
-impl std::fmt::Debug for WebUI {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WebUI").finish_non_exhaustive()
+        return ui;
     }
 }
 
 impl eframe::App for WebUI {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(fe) = &self.file_explorer {
-            if fe.show(ctx) == false {
-                self.file_explorer = None;
-            }
+        // Initialize data.
+        if self.inited == false {
+            self.init(ctx);
+            self.inited = true;
         }
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
+        // Handle data update.
+        // Due to update is trigger at redraw, you need to call [`egui::Context::request_repaint`] to
+        // ensure the update function is executed in time.
+        if let Ok(msg) = self.rx.try_recv() {
+            self.rx(ctx, msg);
+        }
 
-            ui.horizontal(|ui| {
-                egui::widgets::global_dark_light_mode_buttons(ui);
-            });
+        // Update view.
+        self.view(ctx);
+    }
+}
+
+impl WebUI {
+    fn rx(&mut self, ctx: &egui::Context, msg: WebUiMessage) {
+        match msg {
+            WebUiMessage::ActCWD(path) => {
+                self.cd(ctx, path.as_str());
+            }
+            WebUiMessage::SetHomeDir(path) => {
+                self.homedir = Some(path);
+            }
+            WebUiMessage::SetCWD(path) => {
+                self.cwd = Some(path);
+            }
+            WebUiMessage::SetFileList(filelist) => {
+                self.filelist = Some(filelist);
+            }
+        }
+    }
+
+    fn view(&self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            self.view_top_panel(ctx, ui);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
+            self.view_body_panel(ctx, ui);
+        });
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
+        egui::TopBottomPanel::bottom("bottem_panel").show(ctx, |ui| {
+            self.view_bottom_panel(ctx, ui);
+        });
+    }
 
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
+    fn view_top_panel(&self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            // Switch between dark and light mode.
+            egui::widgets::global_dark_light_mode_buttons(ui);
+
+            // Home.
+            if ui.button("🏠").clicked() {
+                if let Some(path) = &self.homedir {
+                    self.cd(ctx, path.as_str());
+                }
             }
 
-            ui.separator();
+            // Refresh.
+            if ui.button("🔃").clicked() {
+                self.refresh(ctx);
+            }
 
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/master/",
-                "Source code."
-            ));
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
+            if let Some(cwd) = &self.cwd {
+                ui.label(cwd);
+            }
         });
+    }
+
+    fn view_bottom_panel(&self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            powered_by_egui_and_eframe(ui);
+            egui::warn_if_debug_build(ui);
+        });
+    }
+
+    fn view_body_panel(&self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        egui_extras::TableBuilder::new(ui)
+            .striped(true)
+            .resizable(true)
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .column(egui_extras::Column::exact(8.0).resizable(false))
+            .column(egui_extras::Column::remainder().resizable(false))
+            .column(egui_extras::Column::exact(64.0).resizable(false))
+            .column(egui_extras::Column::exact(64.0).resizable(false))
+            .column(egui_extras::Column::exact(128.0).resizable(false))
+            .header(20.0, |mut header| {
+                header.col(|_ui| {});
+                header.col(|ui| {
+                    ui.heading("Name");
+                });
+                header.col(|ui| {
+                    ui.heading("Type");
+                });
+                header.col(|ui| {
+                    ui.heading("Size");
+                });
+                header.col(|ui| {
+                    ui.heading("Modified");
+                });
+            })
+            .body(|body| {
+                let mut size = 0;
+                if let Some(filelist) = &self.filelist {
+                    size = filelist.entries.len();
+                }
+
+                body.rows(20.0, size, |idx, mut row| {
+                    let mut item: Option<crate::protocol::ReaddirResponseItem> = None;
+                    if let Some(filelist) = &self.filelist {
+                        item = Some(filelist.entries[idx].clone());
+                    }
+
+                    if let Some(item) = item {
+                        row.col(|ui| {
+                            if item.f_type == "DIR" {
+                                ui.label("📁");
+                            } else {
+                                ui.label("📒");
+                            }
+                        });
+                        row.col(|ui| {
+                            let mut label = egui::Label::new(item.f_name.clone()).truncate(true);
+
+                            if item.f_type == "DIR" {
+                                label = label.sense(egui::Sense::click());
+                            }
+
+                            if ui.add(label).clicked() {
+                                self.cd(ctx, item.f_path.as_str());
+                            }
+                        });
+                        row.col(|ui| {
+                            ui.label(item.f_type.clone());
+                        });
+                        row.col(|ui| {
+                            ui.label(format_size(item.f_size));
+                        });
+                        row.col(|ui| {
+                            ui.label(convert_epoch_to_local_time(item.f_modified));
+                        });
+                    }
+                });
+            });
+    }
+
+    fn init(&self, ctx: &egui::Context) {
+        let req = crate::protocol::DirsRequest {
+            kind: crate::protocol::DirsRequestKind::HomeDir,
+        };
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        self.client.post(
+            &req,
+            move |rsp: Result<crate::protocol::DirsResponse, String>| {
+                let rsp = rsp.unwrap();
+                let homedir = rsp.path.unwrap();
+
+                tx.send(WebUiMessage::SetHomeDir(homedir.clone())).unwrap();
+                tx.send(WebUiMessage::ActCWD(homedir.clone())).unwrap();
+                ctx.request_repaint();
+            },
+        );
+    }
+
+    /// Refresh current directory.
+    fn refresh(&self, ctx: &egui::Context) {
+        if let Some(v) = &self.cwd {
+            self.cd(ctx, v.as_str());
+        }
+    }
+
+    /// Change current directory.
+    ///
+    /// # Arguments
+    /// + `path`: path to change to.
+    fn cd(&self, ctx: &egui::Context, path: &str) {
+        let path = path.to_string();
+        let req = crate::protocol::ReaddirRequest { path: path.clone() };
+
+        let ctx = ctx.clone();
+        let tx = self.tx.clone();
+        self.client.post(
+            &req,
+            move |rsp: Result<crate::protocol::ReaddirResponse, String>| {
+                let mut rsp = rsp.unwrap();
+                rsp.sort();
+
+                tx.send(WebUiMessage::SetCWD(path)).unwrap();
+                tx.send(WebUiMessage::SetFileList(rsp)).unwrap();
+                ctx.request_repaint();
+            },
+        );
     }
 }
 
@@ -89,4 +263,31 @@ fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
         );
         ui.label(".");
     });
+}
+
+/// Convert size in bytes into a human-readable format.
+fn format_size(size: u64) -> String {
+    let units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+    let mut size = size as f64;
+    let mut index = 0;
+
+    while size >= 1024.0 && index < units.len() - 1 {
+        size /= 1024.0;
+        index += 1;
+    }
+
+    return format!("{:.2} {}", size, units[index]);
+}
+
+fn convert_epoch_to_local_time(epoch: u64) -> String {
+    // Create a NaiveDateTime from the timestamp
+    let naive_datetime = chrono::NaiveDateTime::from_timestamp_opt(epoch as i64, 0).unwrap();
+
+    // Convert it to UTC DateTime, then to local timezone
+    let datetime_utc: chrono::DateTime<chrono::Utc> =
+        chrono::DateTime::from_naive_utc_and_offset(naive_datetime, chrono::Utc);
+    let datetime_local = datetime_utc.with_timezone(&chrono::Local);
+
+    // Format the datetime to a string in a human-readable format
+    datetime_local.format("%Y-%m-%d %H:%M:%S").to_string()
 }
