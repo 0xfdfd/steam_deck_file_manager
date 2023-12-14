@@ -232,7 +232,12 @@ impl WebUI {
                                 label = label.sense(egui::Sense::click());
                             }
 
-                            if ui.add(label).clicked() {
+                            let mut rsp = ui.add(label);
+                            if item.f_type == "DIR" {
+                                rsp = rsp.on_hover_cursor(egui::CursorIcon::PointingHand);
+                            }
+
+                            if rsp.clicked() {
                                 self.cd(ctx, item.f_path.as_str());
                             }
                         });
